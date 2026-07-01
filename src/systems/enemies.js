@@ -164,6 +164,7 @@ export class EnemySystem {
         if (enemy.health <= 55) enemy.enraged = true;
         if (enemy.specialTimer <= 0 && distance < 9) {
           enemy.specialTimer = enemy.enraged ? 3 : 5;
+          context.enemyAttack?.(enemy);
           context.damagePlayer(enemy.enraged ? 6 : 4, pos);
           context.extinguish?.(pos, 12);
         }
@@ -184,6 +185,7 @@ export class EnemySystem {
           enemy.group.rotation.y = Math.atan2(direction.x, direction.z);
         } else if (!fleeing && enemy.attackTimer <= 0) {
           enemy.attackTimer = enemy.def.cooldown;
+          context.enemyAttack?.(enemy);
           context.damagePlayer(enemy.def.damage, pos);
         }
       } else {

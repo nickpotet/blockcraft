@@ -162,7 +162,7 @@ class BlockCraft {
       killed: (name, type) => {
         this.runStats.killed++;
         this.quest?.event('kill', type);
-        this.audio.play('hit');
+        this.audio.play('enemy_die');
         this.showToast(`${name} повержен`);
         this.renderQuestUI();
         this.scheduleSave();
@@ -350,6 +350,7 @@ class BlockCraft {
     this.journalOpen = true;
     this.playing = false;
     this.keys.clear();
+    this.audio.play('ui_open');
     if (document.pointerLockElement) document.exitPointerLock();
     this.hud.style.display = 'none';
     this.crosshair.style.display = 'none';
@@ -360,6 +361,7 @@ class BlockCraft {
   closeJournal() {
     if (!this.journalOpen) return;
     this.journalOpen = false;
+    this.audio.play('ui_close');
     this.journalScreen.classList.remove('visible');
     this.lock();
   }
@@ -422,6 +424,7 @@ class BlockCraft {
     const stack = this.inventory.get(index);
     if (stack) this.showItem(stack.id);
     this.rebuildHeldItem();
+    if (this.playing) this.audio.play('select');
   }
 
   selectedStack() { return this.inventory.get(this.selected); }
@@ -432,6 +435,7 @@ class BlockCraft {
     this.inventoryOpen = true;
     this.playing = false;
     this.keys.clear();
+    this.audio.play('ui_open');
     this.stationContext = station ?? this.nearbyStation() ?? 'hand';
     this.chestContext = chestKey;
     if (document.pointerLockElement) document.exitPointerLock();
@@ -450,6 +454,7 @@ class BlockCraft {
     }
     this.inventoryOpen = false;
     this.chestContext = null;
+    this.audio.play('ui_close');
     this.inventoryScreen.classList.remove('visible');
     this.renderAllUI();
     this.lock();
@@ -575,6 +580,7 @@ class BlockCraft {
     const next = source[index];
     source[index] = this.equipment[slot];
     this.equipment[slot] = next;
+    this.audio.play('equip');
     this.renderInventory(); this.renderHotbar(); this.scheduleSave();
   }
 
@@ -582,6 +588,7 @@ class BlockCraft {
     const stack = this.equipment[slot];
     if (!stack) return;
     if (!this.inventory.add(stack.id, stack.count, stack.durability)) this.equipment[slot] = null;
+    this.audio.play('equip');
     this.renderInventory();
   }
 
@@ -1113,13 +1120,13 @@ class BlockCraft {
     this.raycaster.setFromCamera(new THREE.Vector2(),this.camera);this.raycaster.far=20;const action=item?.action;
     if(action==='ranged'){
       if(!this.inventory.remove('bolt',1)){this.showToast('Нет болтов');return true;}
-      const result=this.enemies.hitFromRay(this.raycaster,this.enemies.rayObjects(),item.damage,stack.id,item.range,item.specterDamage);this.attackTimer=item.cooldown;this.damageSelected();this.swingHeld();if(result){this.audio.play('hit');this.spawnParticles(result.enemy.group.position,0x8d1f22,8);this.showToast(`Урон: ${Math.round(result.dealt)}`);}else this.showToast('Болт ушёл в туман');this.renderAllUI();return true;
+      this.audio.play('bow');const result=this.enemies.hitFromRay(this.raycaster,this.enemies.rayObjects(),item.damage,stack.id,item.range,item.specterDamage);this.attackTimer=item.cooldown;this.damageSelected();this.swingHeld();if(result){this.audio.play('arrow_hit');this.spawnParticles(result.enemy.group.position,0x8d1f22,8);this.showToast(`Урон: ${Math.round(result.dealt)}`);}else this.showToast('Болт ушёл в туман');this.renderAllUI();return true;
     }
     if(action==='weapon'||action==='tool'||!item){
       const damage=(item?.damage??1)*(this.weakness>0 ? .65 : 1);const reach=action==='weapon'?4.2:3.4;
       const result=this.enemies.meleeHit({origin:this.raycaster.ray.origin,direction:this.raycaster.ray.direction,damage,weaponId:stack?.id??'hand',reach,specterDamage:item?.specterDamage});
-      if(result){this.attackTimer=item?.cooldown??.5;if(stack?.durability!=null)this.damageSelected();this.swingHeld();this.audio.play('hit');this.spawnParticles(result.enemy.group.position,0x8d1f22,8);return true;}
-      if(action==='weapon'){this.attackTimer=item.cooldown;this.swingHeld();return true;}
+      if(result){this.attackTimer=item?.cooldown??.5;if(stack?.durability!=null)this.damageSelected();this.swingHeld();this.audio.play(result.dealt>=8?'crit':'hit');this.spawnParticles(result.enemy.group.position,0x8d1f22,8);return true;}
+      if(action==='weapon'){this.attackTimer=item.cooldown;this.swingHeld();this.audio.play('swing');return true;}
     }
     return false;
   }
@@ -1127,18 +1134,18 @@ class BlockCraft {
   useSelected() {
     if (this.interactFeatureObject()) return;
     const target=this.getTarget();
-    if(target&&(target.type==='door'||target.type==='door_open')){const next=target.type==='door'?'door_open':'door';this.setBlock(target.x,target.y,target.z,next);this.recordEdit(target.x,target.y,target.z,next);this.buildWorldMeshes();this.scheduleSave();return;}
+    if(target&&(target.type==='door'||target.type==='door_open')){const next=target.type==='door'?'door_open':'door';this.setBlock(target.x,target.y,target.z,next);this.recordEdit(target.x,target.y,target.z,next);this.buildWorldMeshes();this.audio.play('door');this.scheduleSave();return;}
     if(target&&['workbench','chest','campfire'].includes(target.type)){
       const key=this.key(target.x,target.y,target.z);
       if(target.type==='campfire'){
-        const stack=this.selectedStack();if(stack&&['wood','coal'].includes(stack.id)){this.consumeSelected(1);const fire=this.campfires.get(key)??{fuel:0};fire.fuel+=stack.id==='coal'?480:240;this.campfires.set(key,fire);this.showToast(`Костёр горит ещё ${Math.ceil(fire.fuel/60)} мин.`);this.scheduleSave();return;}
+        const stack=this.selectedStack();if(stack&&['wood','coal'].includes(stack.id)){this.consumeSelected(1);const fire=this.campfires.get(key)??{fuel:0};fire.fuel+=stack.id==='coal'?480:240;this.campfires.set(key,fire);this.audio.play('fire');this.showToast(`Костёр горит ещё ${Math.ceil(fire.fuel/60)} мин.`);this.scheduleSave();return;}
         const fire=this.campfires.get(key);if(!fire?.fuel){this.showToast('Костру нужно топливо');return;}this.spawnPoint.set(target.x,target.y+.51,target.z+1.2);this.showToast('Место возрождения сохранено');this.openInventory('campfire');return;
       }
-      if(target.type==='chest'){this.openInventory('hand',key);return;}this.openInventory('workbench');return;
+      if(target.type==='chest'){this.audio.play('chest');this.openInventory('hand',key);return;}this.openInventory('workbench');return;
     }
     const stack=this.selectedStack(),item=stack?ITEMS[stack.id]:null;if(!item){if(this.equipment.shield)this.blocking=true;return;}
-    if(item.action==='food'){if(this.hunger>=20){this.showToast('Вы не голодны');return;}this.hunger=Math.min(20,this.hunger+item.food);if(item.risk&&Math.random()<item.risk){this.weakness=20;this.showToast('Сырое мясо отняло силы');}this.consumeSelected();this.renderStatus();return;}
-    if(item.action==='heal'){if(this.elixirCooldown>0){this.showToast(`Эликсир: ${Math.ceil(this.elixirCooldown)} сек.`);return;}this.health=Math.min(20,this.health+item.heal);this.elixirCooldown=item.cooldown;this.consumeSelected();this.renderStatus();return;}
+    if(item.action==='food'){if(this.hunger>=20){this.showToast('Вы не голодны');return;}this.hunger=Math.min(20,this.hunger+item.food);if(item.risk&&Math.random()<item.risk){this.weakness=20;this.showToast('Сырое мясо отняло силы');}this.audio.play('eat');this.consumeSelected();this.renderStatus();return;}
+    if(item.action==='heal'){if(this.elixirCooldown>0){this.showToast(`Эликсир: ${Math.ceil(this.elixirCooldown)} сек.`);return;}this.health=Math.min(20,this.health+item.heal);this.elixirCooldown=item.cooldown;this.audio.play('drink');this.audio.play('heal');this.consumeSelected();this.renderStatus();return;}
     if(item.action==='equipArmor'||item.action==='equipShield'){this.equipFrom(this.inventory.slots,this.selected,item.action==='equipArmor'?'armor':'shield');return;}
     if(item.action==='bomb'){this.throwBomb(item);return;}
     if(item.action==='place'){this.placeBlock(item.block);return;}
@@ -1146,15 +1153,15 @@ class BlockCraft {
   }
 
   throwBomb(item) {
-    this.raycaster.setFromCamera(new THREE.Vector2(),this.camera);const target=this.getTarget(item.range);const center=target?.point??this.camera.position.clone().addScaledVector(this.raycaster.ray.direction,item.range);const hits=this.enemies.explode(center,item.damage,item.radius);this.consumeSelected();this.spawnParticles(center,0xe06a2b,24);this.audio.play('hit');this.showToast(hits?`Бомба задела врагов: ${hits}`:'Бомба рассеялась в тумане');this.renderAllUI();
+    this.raycaster.setFromCamera(new THREE.Vector2(),this.camera);const target=this.getTarget(item.range);const center=target?.point??this.camera.position.clone().addScaledVector(this.raycaster.ray.direction,item.range);const hits=this.enemies.explode(center,item.damage,item.radius);this.consumeSelected();this.spawnParticles(center,0xe06a2b,24);this.audio.play('explode');this.showToast(hits?`Бомба задела врагов: ${hits}`:'Бомба рассеялась в тумане');this.renderAllUI();
   }
 
   consumeSelected(count=1) { const stack=this.selectedStack();if(!stack)return;stack.count-=count;if(stack.count<=0)this.inventory.slots[this.selected]=null;this.renderAllUI();this.scheduleSave(); }
-  damageSelected(amount=1) { const id=this.selectedStack()?.id;if(this.inventory.damage(this.selected,amount)){this.showToast(`${ITEMS[id].name} сломан`);}this.renderAllUI(); }
+  damageSelected(amount=1) { const id=this.selectedStack()?.id;if(this.inventory.damage(this.selected,amount)){this.audio.play('item_break');this.showToast(`${ITEMS[id].name} сломан`);}this.renderAllUI(); }
 
   placeBlock(type) {
     const target=this.getTarget();if(!target)return;const x=target.x+Math.round(target.normal.x),y=target.y+Math.round(target.normal.y),z=target.z+Math.round(target.normal.z);if(this.intersectsPlayerBlock(x,y,z)){this.showToast('Здесь стоит игрок');return;}
-    this.setBlock(x,y,z,type);this.recordEdit(x,y,z,type);this.consumeSelected();this.quest?.event('place',type);if(['grass','dirt','stone','sand','wood','leaves','planks','brick','door'].includes(type))this.quest?.event('build',type);const key=this.key(x,y,z);if(type==='campfire')this.campfires.set(key,{fuel:240});if(type==='chest')this.containers.set(key,Array(18).fill(null));this.buildWorldMeshes();this.audio.play(type==='campfire'?'fire':'click');this.scheduleSave();
+    this.setBlock(x,y,z,type);this.recordEdit(x,y,z,type);this.consumeSelected();this.quest?.event('place',type);if(['grass','dirt','stone','sand','wood','leaves','planks','brick','door'].includes(type))this.quest?.event('build',type);const key=this.key(x,y,z);if(type==='campfire')this.campfires.set(key,{fuel:240});if(type==='chest')this.containers.set(key,Array(18).fill(null));this.buildWorldMeshes();this.audio.play(type==='campfire'?'fire':type==='torch'?'torch':type==='door'?'door':'place');this.scheduleSave();
   }
 
   updateMining(dt) {
@@ -1162,8 +1169,11 @@ class BlockCraft {
     const key=this.key(target.x,target.y,target.z);if(!this.mining||this.mining.key!==key)this.mining={key,progress:0,target};
     const block=BLOCKS[target.type],item=this.selectedItem();let speed=1;if(item?.tool===block.tool)speed=item.speed;else if(block.tool)speed=.38;
     this.mining.progress+=dt*speed/block.hardness;this.miningProgress.style.display='block';this.miningProgress.querySelector('span').style.width=`${Math.min(1,this.mining.progress)*100}%`;
+    this.mineSfxTimer=(this.mineSfxTimer??0)-dt;if(this.mineSfxTimer<=0){this.mineSfxTimer=.19;this.audio.play(this.digSound(target.type));}
     if(this.mining.progress>=1){this.harvestBlock(target,item);this.resetMining();}
   }
+
+  digSound(type){ if(['wood','planks','door','door_open','chest','workbench'].includes(type))return 'dig_wood'; if(type==='leaves')return 'dig_leaves'; if(['dirt','grass','sand'].includes(type))return 'dig_dirt'; return 'dig_stone'; }
 
   resetMining() { this.mining=null;if(this.miningProgress)this.miningProgress.style.display='none'; }
 
@@ -1175,7 +1185,7 @@ class BlockCraft {
     } else if(target.type==='stone'&&!proper){if(Math.random()<.45)this.collectItem('flint',1);}
     else if(proper&&block.drop)this.collectItem(block.drop,1);
     const key=this.key(target.x,target.y,target.z);this.campfires.delete(key);this.containers.delete(key);
-    if(item?.durability!=null)this.damageSelected();this.spawnParticles(new THREE.Vector3(target.x,target.y,target.z),this.blockParticleColor(target.type),7);this.audio.play('mine');this.buildWorldMeshes();this.scheduleSave();
+    if(item?.durability!=null)this.damageSelected();this.spawnParticles(new THREE.Vector3(target.x,target.y,target.z),this.blockParticleColor(target.type),7);this.audio.play('break');this.buildWorldMeshes();this.scheduleSave();
   }
 
   collectItem(id,count) { const left=this.inventory.add(id,count);const gained=count-left;if(gained>0)this.quest?.event('collect',id,gained);if(left)this.dropItem(id,left,this.player.position);else this.showToast(`Получено: ${ITEMS[id].name} ×${count}`);this.renderAllUI(); }
@@ -1223,7 +1233,7 @@ class BlockCraft {
     }
   }
 
-  updateDrops(dt) { for(let i=this.worldDrops.length-1;i>=0;i--){const drop=this.worldDrops[i];drop.age+=dt;drop.mesh.rotation.y+=dt;drop.mesh.position.y+=Math.sin(drop.age*3)*dt*.03;if(drop.mesh.position.distanceTo(this.player.position)<1.5){const left=this.inventory.add(drop.id,drop.count);if(!left){this.scene.remove(drop.mesh);drop.mesh.geometry.dispose();drop.mesh.material.dispose();this.worldDrops.splice(i,1);this.renderAllUI();}else drop.count=left;}} }
+  updateDrops(dt) { for(let i=this.worldDrops.length-1;i>=0;i--){const drop=this.worldDrops[i];drop.age+=dt;drop.mesh.rotation.y+=dt;drop.mesh.position.y+=Math.sin(drop.age*3)*dt*.03;if(drop.mesh.position.distanceTo(this.player.position)<1.5){const left=this.inventory.add(drop.id,drop.count);if(!left){this.scene.remove(drop.mesh);drop.mesh.geometry.dispose();drop.mesh.material.dispose();this.worldDrops.splice(i,1);this.audio.play('pickup');this.renderAllUI();}else drop.count=left;}} }
 
   intersectsPlayerBlock(x,y,z) { const p=this.player;return p.position.x+p.radius>x-.5&&p.position.x-p.radius<x+.5&&p.position.z+p.radius>z-.5&&p.position.z-p.radius<z+.5&&p.position.y+p.height>y-.5&&p.position.y<y+.5; }
   isSolid(x,y,z) { const type=this.getBlock(x,y,z);return!!type&&!BLOCKS[type].water&&!BLOCKS[type].open&&!BLOCKS[type].torch&&!BLOCKS[type].small; }
@@ -1236,9 +1246,11 @@ class BlockCraft {
   updatePlayer(dt) {
     if(!this.playing)return;{const kx=(this.keys.has('ArrowRight')?1:0)-(this.keys.has('ArrowLeft')?1:0),ky=(this.keys.has('ArrowDown')?1:0)-(this.keys.has('ArrowUp')?1:0);if(kx||ky){this.yaw-=kx*1.8*dt;this.pitch=THREE.MathUtils.clamp(this.pitch-ky*1.5*dt,-1.54,1.54);}}
     if(this.lookAccum.x||this.lookAccum.y){this.yaw-=this.lookAccum.x*this.settings.sensitivity;this.pitch=THREE.MathUtils.clamp(this.pitch-this.lookAccum.y*this.settings.sensitivity,-1.54,1.54);this.lookAccum.set(0,0);}
-    const input=new THREE.Vector2((this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0),(this.keys.has('KeyW')?1:0)-(this.keys.has('KeyS')?1:0));if(input.lengthSq()>1)input.normalize();const sprint=this.keys.has('ShiftLeft')&&this.hunger>0,speed=sprint?7:5,sin=Math.sin(this.yaw),cos=Math.cos(this.yaw);const tx=(input.x*cos-input.y*sin)*speed,tz=(-input.x*sin-input.y*cos)*speed,accel=this.player.grounded?18:7;this.velocity.x=THREE.MathUtils.damp(this.velocity.x,tx,accel,dt);this.velocity.z=THREE.MathUtils.damp(this.velocity.z,tz,accel,dt);this.velocity.y-=22*dt;if(this.keys.has('Space')&&this.player.grounded){this.velocity.y=8.2;this.player.grounded=false;}this.player.grounded=false;this.moveAndCollide('x',this.velocity.x*dt);this.moveAndCollide('z',this.velocity.z*dt);this.moveAndCollide('y',this.velocity.y*dt);if(sprint&&input.lengthSq())this.hunger=Math.max(0,this.hunger-dt*.045);if(this.player.position.y<-10)this.takeDamage(99);this.camera.position.copy(this.player.position).add(new THREE.Vector3(0,this.player.eye,0));this.camera.rotation.set(this.pitch,this.yaw,0);
+    const wasGrounded=this.player.grounded;const input=new THREE.Vector2((this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0),(this.keys.has('KeyW')?1:0)-(this.keys.has('KeyS')?1:0));if(input.lengthSq()>1)input.normalize();const sprint=this.keys.has('ShiftLeft')&&this.hunger>0,speed=sprint?7:5,sin=Math.sin(this.yaw),cos=Math.cos(this.yaw);const tx=(input.x*cos-input.y*sin)*speed,tz=(-input.x*sin-input.y*cos)*speed,accel=this.player.grounded?18:7;this.velocity.x=THREE.MathUtils.damp(this.velocity.x,tx,accel,dt);this.velocity.z=THREE.MathUtils.damp(this.velocity.z,tz,accel,dt);this.velocity.y-=22*dt;if(this.keys.has('Space')&&this.player.grounded){this.velocity.y=8.2;this.player.grounded=false;this.audio.play('jump');}this.player.grounded=false;const fallV=this.velocity.y;this.moveAndCollide('x',this.velocity.x*dt);this.moveAndCollide('z',this.velocity.z*dt);this.moveAndCollide('y',this.velocity.y*dt);if(this.player.grounded&&!wasGrounded&&fallV<-6)this.audio.play('land');this.stepTimer=(this.stepTimer??0)-dt;if(this.player.grounded&&input.lengthSq()>0&&this.stepTimer<=0){this.stepTimer=sprint?.3:.42;this.audio.play(this.footstepSound());}if(sprint&&input.lengthSq())this.hunger=Math.max(0,this.hunger-dt*.045);if(this.player.position.y<-10)this.takeDamage(99);this.camera.position.copy(this.player.position).add(new THREE.Vector3(0,this.player.eye,0));this.camera.rotation.set(this.pitch,this.yaw,0);
     this.ensureChunksAt(this.worldToChunk(this.player.position.x),this.worldToChunk(this.player.position.z));
   }
+
+  footstepSound() { const type=this.getBlock(Math.round(this.player.position.x),Math.floor(this.player.position.y-.1),Math.round(this.player.position.z));if(type==='water')return 'splash';if(['stone','coal_ore','iron_ore','silver_ore','brick','bedrock'].includes(type))return 'step_stone';if(['wood','planks','door','door_open','chest','workbench'].includes(type))return 'step_wood';if(['grass','leaves'].includes(type))return 'step_grass';return 'step'; }
 
   updateSurvival(dt) {
     if(!this.playing)return;this.survivalTimer+=dt;this.regenTimer+=dt;this.weakness=Math.max(0,this.weakness-dt);this.elixirCooldown=Math.max(0,this.elixirCooldown-dt);this.attackTimer=Math.max(0,this.attackTimer-dt);
@@ -1248,12 +1260,12 @@ class BlockCraft {
   }
 
   takeDamage(amount,source=null) {
-    let damage=amount;if(this.equipment.armor){damage*=1-(ITEMS[this.equipment.armor.id].armor??0);this.damageEquipment('armor');}
-    if(this.blocking&&this.equipment.shield&&source){const forward=new THREE.Vector3(-Math.sin(this.yaw),0,-Math.cos(this.yaw)),toSource=source.clone().sub(this.player.position).setY(0).normalize();if(forward.dot(toSource)>.15){damage*=1-(ITEMS.shield.block??.6);this.damageEquipment('shield');}}
-    this.health=Math.max(0,this.health-damage);this.audio.play('hurt');this.damageFlash.classList.remove('active');void this.damageFlash.offsetWidth;this.damageFlash.classList.add('active');this.renderStatus();if(this.health<=0)this.die();
+    let damage=amount,blocked=false;if(this.equipment.armor){damage*=1-(ITEMS[this.equipment.armor.id].armor??0);this.damageEquipment('armor');}
+    if(this.blocking&&this.equipment.shield&&source){const forward=new THREE.Vector3(-Math.sin(this.yaw),0,-Math.cos(this.yaw)),toSource=source.clone().sub(this.player.position).setY(0).normalize();if(forward.dot(toSource)>.15){damage*=1-(ITEMS.shield.block??.6);this.damageEquipment('shield');blocked=true;}}
+    this.health=Math.max(0,this.health-damage);this.audio.play(blocked?'block':'hurt');this.damageFlash.classList.remove('active');void this.damageFlash.offsetWidth;this.damageFlash.classList.add('active');this.renderStatus();if(this.health<=0)this.die();
   }
-  damageEquipment(slot) { const stack=this.equipment[slot];if(!stack?.durability)return;stack.durability--;if(stack.durability<=0){this.showToast(`${ITEMS[stack.id].name} уничтожен`);this.equipment[slot]=null;} }
-  die() { this.inventory.loseResources(.3);this.runStats.deaths++;this.enemies.removeElites();this.health=20;this.hunger=12;this.player.position.copy(this.spawnPoint);this.velocity.set(0,0,0);this.showToast('Вы вернулись к огню, но часть припасов потеряна');this.renderAllUI();this.scheduleSave(); }
+  damageEquipment(slot) { const stack=this.equipment[slot];if(!stack?.durability)return;stack.durability--;if(stack.durability<=0){this.audio.play('item_break');this.showToast(`${ITEMS[stack.id].name} уничтожен`);this.equipment[slot]=null;} }
+  die() { this.audio.play('death');this.inventory.loseResources(.3);this.runStats.deaths++;this.enemies.removeElites();this.health=20;this.hunger=12;this.player.position.copy(this.spawnPoint);this.velocity.set(0,0,0);this.showToast('Вы вернулись к огню, но часть припасов потеряна');this.renderAllUI();this.scheduleSave(); }
 
   updateDayNight(dt) {
     if(!this.playing)return;this.totalTime+=dt;this.timeOfDay=(this.timeOfDay+dt/480)%1;const daylight=Math.max(.08,Math.sin(this.timeOfDay*Math.PI*2-Math.PI/2)*.5+.5);const b=this.settings.brightness??1;this.sun.intensity=(.2+daylight*3.2)*b;this.hemi.intensity=(.35+daylight*1.65)*b;this.renderer.toneMappingExposure=(0.6+daylight*0.9)*b;const dayColor=new THREE.Color(0x7ab8e8),nightColor=new THREE.Color(0x0e1520);this.scene.background.copy(nightColor).lerp(dayColor,daylight);this.scene.fog.color.copy(this.scene.background);this.timeStatus.textContent=this.isNight()?`☾ Ночь ${this.formatTime()}`:`☼ День ${this.formatTime()}`;
@@ -1264,7 +1276,7 @@ class BlockCraft {
   nearWater(x,z) { for(let dx=-3;dx<=3;dx++)for(let dz=-3;dz<=3;dz++)for(let y=SEA_LEVEL-1;y<=SEA_LEVEL;y++)if(this.getBlock(x+dx,y,z+dz)==='water')return true;return false; }
   isSafe(position) { const r=12;for(let x=Math.round(position.x)-r;x<=Math.round(position.x)+r;x++)for(let y=Math.round(position.y)-2;y<=Math.round(position.y)+2;y++)for(let z=Math.round(position.z)-r;z<=Math.round(position.z)+r;z++){const type=this.getBlock(x,y,z),distance=Math.hypot(x-position.x,z-position.z);if(type==='torch'&&distance<=6)return true;if(type==='campfire'&&distance<=12&&(this.campfires.get(this.key(x,y,z))?.fuel??0)>0)return true;}return false; }
 
-  updateEnemies(dt) { if(!this.playing)return;this.enemies.update(dt,{player:this.player.position,isNight:this.isNight(),time:this.totalTime,groundY:(x,z)=>this.topSolidY(x,z),nearWater:(x,z)=>this.nearWater(x,z),isSafe:pos=>this.isSafe(pos),damagePlayer:(damage,pos)=>this.takeDamage(damage,pos),extinguish:(pos,radius)=>this.extinguishNear(pos,radius),eliteHealth:()=>{}}); }
+  updateEnemies(dt) { if(!this.playing)return;this.enemies.update(dt,{player:this.player.position,isNight:this.isNight(),time:this.totalTime,groundY:(x,z)=>this.topSolidY(x,z),nearWater:(x,z)=>this.nearWater(x,z),isSafe:pos=>this.isSafe(pos),damagePlayer:(damage,pos)=>this.takeDamage(damage,pos),enemyAttack:enemy=>this.playEnemyVoice(enemy,.9),extinguish:(pos,radius)=>this.extinguishNear(pos,radius),eliteHealth:()=>{}}); }
 
   updateQuestWorld() {
     if (!this.quest || this.quest.complete) { this.updateCompass(); return; }
@@ -1278,6 +1290,7 @@ class BlockCraft {
         const position = new THREE.Vector3(feature.x, feature.y, feature.z);
         if (step.target === 'ancient_leshy') position.y += .2;
         this.enemies.spawn(step.target, position);
+        this.audio.play('boss');
         this.showToast(`${this.enemies.enemies.at(-1).def.name} выходит на охоту`);
       }
     }
@@ -1381,6 +1394,41 @@ class BlockCraft {
     this.music.update(dt);
   }
 
+  playEnemyVoice(enemy, gain = 1) {
+    const model = enemy.def.model ?? enemy.type;
+    const sound = model === 'wolf' ? 'wolf' : model === 'bogling' ? 'bogling' : model === 'leshy' ? 'leshy' : 'wraith';
+    this.audio.play(sound, { gain });
+  }
+
+  updateAmbient(dt) {
+    if (!this.playing || !this.torchPositions) return;
+    const px = this.player.position.x, pz = this.player.position.z;
+    let near = Infinity;
+    for (const p of this.torchPositions) {
+      if (!(p.type === 'torch' || (this.campfires.get(p.key)?.fuel ?? 0) > 0)) continue;
+      const d = Math.hypot(p.x - px, p.z - pz);
+      if (d < near) near = d;
+    }
+    this.fireSfxTimer = (this.fireSfxTimer ?? 0) - dt;
+    if (near < 7 && this.fireSfxTimer <= 0) {
+      this.fireSfxTimer = .35 + Math.random() * .5;
+      this.audio.play('fire', { gain: Math.max(.3, 1 - near / 7) });
+    }
+    this.windSfxTimer = (this.windSfxTimer ?? 1) - dt;
+    if (this.windSfxTimer <= 0) {
+      this.windSfxTimer = 7 + Math.random() * 8;
+      this.audio.play(this.isNight() ? 'night_wind' : 'wind');
+    }
+    this.enemyVoiceTimer = (this.enemyVoiceTimer ?? 2) - dt;
+    if (this.enemyVoiceTimer <= 0) {
+      const enemy = this.enemies.enemies
+        .filter(candidate => candidate.group.position.distanceTo(this.player.position) < 20)
+        .sort((a,b) => a.group.position.distanceTo(this.player.position) - b.group.position.distanceTo(this.player.position))[0];
+      if (enemy) this.playEnemyVoice(enemy, .55);
+      this.enemyVoiceTimer = 4 + Math.random() * 5;
+    }
+  }
+
   renderBossBar() {
     if (!this.bossBar) return;
     const elite = this.enemies.enemies.find(enemy => enemy.def.elite && enemy.group.position.distanceTo(this.player.position) < 34);
@@ -1424,7 +1472,7 @@ class BlockCraft {
 
   onResize() { this.camera.aspect=innerWidth/innerHeight;this.camera.updateProjectionMatrix();this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));this.renderer.setSize(innerWidth,innerHeight); }
   animate() {
-    requestAnimationFrame(()=>this.animate());const now=performance.now(),dt=Math.min((now-this.lastTime)/1000,.05);this.lastTime=now;this.updatePlayer(dt);this.updateMining(dt);this.updateSurvival(dt);this.updateDayNight(dt);this.updateQuestWorld();this.updateEnemies(dt);this.updateDrops(dt);this.updateParticles(dt);this.updateSense(dt);this.updateLights();this.updateTarget();this.renderBossBar();this.updateMusic(dt);this.clouds.position.x=((now*.00035+70)%140)-70;this.renderer.render(this.scene,this.camera);
+    requestAnimationFrame(()=>this.animate());const now=performance.now(),dt=Math.min((now-this.lastTime)/1000,.05);this.lastTime=now;this.updatePlayer(dt);this.updateMining(dt);this.updateSurvival(dt);this.updateDayNight(dt);this.updateQuestWorld();this.updateEnemies(dt);this.updateDrops(dt);this.updateParticles(dt);this.updateSense(dt);this.updateLights();this.updateTarget();this.renderBossBar();this.updateMusic(dt);this.updateAmbient(dt);this.clouds.position.x=((now*.00035+70)%140)-70;this.renderer.render(this.scene,this.camera);
   }
 }
 
