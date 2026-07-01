@@ -20,7 +20,11 @@ html, body, #game {
   overflow: hidden;
   background: #232b2e;
   user-select: none;
+  touch-action: none;
+  overscroll-behavior: none;
 }
+
+@supports (height: 100dvh) { html, body, #game { height: 100dvh; } }
 
 canvas { display: block; }
 
@@ -201,6 +205,7 @@ button.secondary { background: linear-gradient(90deg, rgba(38,42,42,.97), rgba(1
 }
 
 .controls-card div { display: flex; justify-content: space-between; gap: 20px; }
+.touch-help { display: none; }
 kbd { color: #c3a066; font: inherit; }
 .screen small { font-size: 18px; color: rgba(255,255,255,.68); }
 .screen h2 { margin: 0; font: 900 48px "Cinzel", serif; letter-spacing: 6px; text-shadow: 3px 4px #000; }
@@ -224,6 +229,8 @@ kbd { color: #c3a066; font: inherit; }
   display: none;
   pointer-events: none;
 }
+
+#mobile-controls { display: none; }
 
 #status {
   position: absolute;
@@ -610,6 +617,123 @@ body.hunter-sense #crosshair { filter: drop-shadow(0 0 5px #a11c20); }
 #cursor-stack img { width: 100%; height: 100%; image-rendering: pixelated; }
 #cursor-stack b { position: absolute; right: 0; bottom: 0; }
 
+body.touch-device button { -webkit-tap-highlight-color: transparent; }
+body.touch-device #mobile-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: block;
+  pointer-events: none;
+}
+
+#mobile-look-zone {
+  position: absolute;
+  z-index: 1;
+  top: 54px;
+  right: 0;
+  bottom: 0;
+  width: 58%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#mobile-top-actions {
+  position: absolute;
+  z-index: 5;
+  top: max(8px, env(safe-area-inset-top));
+  right: max(8px, env(safe-area-inset-right));
+  display: flex;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+#mobile-top-actions button {
+  min-width: 0;
+  height: 38px;
+  padding: 7px 10px;
+  border: 1px solid rgba(176,153,113,.62);
+  border-left-width: 1px;
+  border-radius: 3px;
+  background: rgba(9,12,12,.76);
+  box-shadow: 0 3px 10px rgba(0,0,0,.45);
+  font: 700 10px "Cinzel", serif;
+  letter-spacing: 1px;
+}
+
+#mobile-top-actions #mobile-pause { width: 40px; padding: 0; font-size: 20px; }
+
+#mobile-move-pad {
+  position: absolute;
+  z-index: 4;
+  left: max(20px, env(safe-area-inset-left));
+  bottom: max(24px, calc(env(safe-area-inset-bottom) + 12px));
+  width: 126px;
+  height: 126px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(188,173,143,.4);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(68,72,68,.38) 0 25%, rgba(8,11,11,.52) 26% 100%);
+  box-shadow: inset 0 0 20px rgba(0,0,0,.5), 0 4px 14px rgba(0,0,0,.35);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#mobile-move-knob {
+  width: 54px;
+  height: 54px;
+  border: 2px solid rgba(202,179,137,.66);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(141,47,40,.92), rgba(56,17,16,.94));
+  box-shadow: 0 5px 12px rgba(0,0,0,.55);
+  transition: transform .04s linear;
+}
+
+#mobile-action-buttons {
+  position: absolute;
+  z-index: 6;
+  right: max(15px, env(safe-area-inset-right));
+  bottom: max(20px, calc(env(safe-area-inset-bottom) + 10px));
+  width: 184px;
+  height: 160px;
+  pointer-events: none;
+}
+
+#mobile-action-buttons button {
+  position: absolute;
+  min-width: 0;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(190,166,125,.72);
+  border-left-width: 1px;
+  border-radius: 50%;
+  color: #eee4d3;
+  background: radial-gradient(circle at 40% 32%, rgba(62,68,65,.92), rgba(13,16,16,.9));
+  box-shadow: inset 0 0 11px rgba(255,255,255,.035), 0 4px 12px rgba(0,0,0,.5);
+  font: 700 24px "Cinzel", serif;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#mobile-action-buttons button.pressed {
+  scale: .92;
+  color: white;
+  border-color: #d3aa6c;
+  background: radial-gradient(circle, #a62b25, #43100f);
+}
+
+#mobile-attack { right: 0; bottom: 0; width: 72px !important; height: 72px !important; color: #e5c9b5 !important; }
+#mobile-use { right: 76px; bottom: 8px; }
+#mobile-jump { right: 18px; bottom: 82px; }
+#mobile-sprint { right: 88px; bottom: 76px; }
+#mobile-sense { right: 128px; bottom: 12px; width: 48px !important; height: 48px !important; color: #c74740 !important; }
+
+body.touch-device #hotbar { z-index: 20; pointer-events: auto; }
+body.touch-device #cursor-stack { left: 50% !important; top: auto !important; bottom: 84px; translate: -50% 0; }
+
 @media (max-width: 650px) {
   .controls-card { grid-template-columns: 1fr; }
   .edition-badge { display: none; }
@@ -624,4 +748,80 @@ body.hunter-sense #crosshair { filter: drop-shadow(0 0 5px #a11c20); }
   .inventory-layout { grid-template-columns: 1fr; overflow: auto; }
   .inventory-layout > * { overflow: visible; border-right: 0; border-bottom: 1px solid #453f35; }
   #inventory-grid, #container-grid { grid-template-columns: repeat(6, 1fr); }
+}
+
+@media (pointer: coarse), (max-width: 900px) {
+  button { min-height: 46px; }
+  .screen { overflow-y: auto; padding: max(16px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+  body.touch-device .controls-card:not(.touch-help) { display: none; }
+  body.touch-device .touch-help { display: grid; }
+  #pause-screen { align-content: start; padding-top: max(28px, env(safe-area-inset-top)); }
+  .settings-panel { width: min(340px, calc(100vw - 28px)); }
+  #inventory-screen, #journal-screen { inset: 0; border-width: 0; outline: 0; padding-top: env(safe-area-inset-top); }
+  .inventory-header { height: 62px; padding: 7px max(10px, env(safe-area-inset-right)) 7px max(10px, env(safe-area-inset-left)); }
+  .inventory-header h2 { font-size: 20px; letter-spacing: 2px; }
+  .inventory-header small { font-size: 11px; }
+  .inventory-header .rune { font-size: 30px; }
+  .inventory-layout { height: calc(100% - 62px - env(safe-area-inset-top)); grid-template-columns: 1fr; overflow-y: auto; }
+  .inventory-layout > * { padding: 14px; overflow: visible; border-right: 0; border-bottom: 1px solid #453f35; }
+  .item-panel { display: grid; grid-template-columns: 1fr auto; gap: 12px; }
+  #item-details { min-height: 130px; }
+  #equipment { margin: 0; padding: 0 0 0 12px; border-top: 0; border-left: 1px solid #474136; }
+  #inventory-grid, #container-grid { grid-template-columns: repeat(6, minmax(42px, 1fr)); gap: 5px; }
+  .inventory-slot { min-height: 48px; }
+  .craft-title { top: -14px; }
+  #journal-content { height: calc(100% - 62px - env(safe-area-inset-top)); padding: 14px; }
+  .journal-contract { padding: 13px; }
+  .journal-contract h3 { font-size: 18px; }
+  .journal-contract > p { margin: 7px 0; }
+  #victory-screen h2 { font-size: clamp(27px, 8vw, 42px); }
+}
+
+@media (orientation: portrait) {
+  body.touch-device #status { left: max(8px, env(safe-area-inset-left)); top: max(8px, env(safe-area-inset-top)); gap: 5px; }
+  body.touch-device .survival-stat { width: 88px; padding: 4px 6px; }
+  body.touch-device #world-status { display: none; }
+  body.touch-device #mobile-top-actions { top: max(58px, calc(env(safe-area-inset-top) + 50px)); }
+  body.touch-device #quest-objective { left: max(8px, env(safe-area-inset-left)); top: max(58px, calc(env(safe-area-inset-top) + 50px)); width: 44vw; padding: 7px 8px; }
+  body.touch-device #quest-objective em, body.touch-device #quest-objective i { display: none; }
+  body.touch-device #quest-compass { top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); bottom: auto; left: auto; min-width: 0; max-width: 48vw; translate: none; padding: 5px 8px; }
+  body.touch-device #compass-distance { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  body.touch-device #hotbar { bottom: max(190px, calc(env(safe-area-inset-bottom) + 180px)); width: calc(100vw - 16px); justify-content: center; padding: 3px; }
+  body.touch-device .slot { width: min(10vw, 40px); height: min(10vw, 40px); }
+  body.touch-device .slot img { width: 26px; height: 26px; }
+  body.touch-device #tooltip { bottom: max(238px, calc(env(safe-area-inset-bottom) + 228px)); font-size: 13px; }
+  body.touch-device #mobile-move-pad { width: 116px; height: 116px; }
+  body.touch-device #mobile-action-buttons { scale: .94; transform-origin: right bottom; }
+  body.touch-device #boss-bar { top: max(116px, calc(env(safe-area-inset-top) + 108px)); width: 74vw; }
+}
+
+@media (orientation: landscape) {
+  body.touch-device #status { left: max(8px, env(safe-area-inset-left)); top: max(7px, env(safe-area-inset-top)); gap: 5px; }
+  body.touch-device .survival-stat { width: 96px; padding: 3px 6px; }
+  body.touch-device #world-status { display: none; }
+  body.touch-device #quest-objective { left: max(8px, env(safe-area-inset-left)); top: max(55px, calc(env(safe-area-inset-top) + 48px)); width: 31vw; padding: 6px 8px; }
+  body.touch-device #quest-objective em, body.touch-device #quest-objective i { display: none; }
+  body.touch-device #quest-compass { top: max(7px, env(safe-area-inset-top)); min-width: 210px; padding: 5px 9px; }
+  body.touch-device #hotbar { bottom: max(7px, env(safe-area-inset-bottom)); }
+  body.touch-device .slot { width: 38px; height: 38px; }
+  body.touch-device .slot img { width: 25px; height: 25px; }
+  body.touch-device #tooltip { bottom: max(54px, calc(env(safe-area-inset-bottom) + 48px)); font-size: 13px; }
+  body.touch-device #mobile-move-pad { width: 108px; height: 108px; bottom: max(52px, calc(env(safe-area-inset-bottom) + 45px)); }
+  body.touch-device #mobile-action-buttons { bottom: max(45px, calc(env(safe-area-inset-bottom) + 38px)); scale: .85; transform-origin: right bottom; }
+  body.touch-device #mobile-top-actions button { height: 34px; min-height: 34px; }
+  body.touch-device #boss-bar { top: max(48px, calc(env(safe-area-inset-top) + 42px)); }
+  #start-screen { gap: 6px; }
+  #start-screen .sigil { display: none; }
+  #start-screen .logo { font-size: min(12vh, 58px); }
+  #start-screen .tagline { margin: 0; font-size: 16px; }
+  #start-screen .menu-panel { padding: 8px; gap: 6px; }
+  #start-screen .menu-panel button { min-height: 38px; padding: 7px 20px; font-size: 15px; }
+  #help-panel { max-height: calc(100vh - 24px); overflow-y: auto; }
+  #help-panel .controls-card { grid-template-columns: repeat(2,minmax(170px,1fr)); }
+  #pause-screen { grid-template-columns: repeat(2,minmax(240px,340px)); align-items: start; justify-content: center; gap: 8px 16px; }
+  #pause-screen .sigil, #pause-screen h2 { grid-column: 1 / -1; }
+  #pause-screen h2 { font-size: 28px; }
+  #pause-screen > button { min-width: 240px; }
+  #pause-screen .settings-panel { grid-column: 1 / -1; }
+  #pause-screen > small { grid-column: 1 / -1; }
 }

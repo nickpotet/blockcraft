@@ -2,7 +2,7 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#87c7f0" />
     <title>BlockCraft</title>
   </head>
@@ -29,13 +29,22 @@
           <div><kbd>SPACE</kbd><span>прыжок</span></div>
           <div><kbd>ЛКМ</kbd><span>сломать</span></div>
           <div><kbd>ПКМ</kbd><span>поставить</span></div>
-          <div><kbd>1 — 8</kbd><span>выбрать блок</span></div>
+          <div><kbd>1 — 9</kbd><span>выбрать предмет</span></div>
           <div><kbd>SHIFT</kbd><span>бег</span></div>
           <div><kbd>E</kbd><span>рюкзак и крафт</span></div>
           <div><kbd>J</kbd><span>журнал охотника</span></div>
           <div><kbd>F</kbd><span>чутьё охотника</span></div>
           <div><kbd>← ↑ →</kbd><span>обзор без захвата</span></div>
           <div><kbd>ESC</kbd><span>привал</span></div>
+        </div>
+        <div class="controls-card touch-help">
+          <div><kbd>ЛЕВЫЙ СТИК</kbd><span>движение</span></div>
+          <div><kbd>СВАЙП СПРАВА</kbd><span>обзор</span></div>
+          <div><kbd>⚔</kbd><span>атака и добыча</span></div>
+          <div><kbd>◆</kbd><span>использовать</span></div>
+          <div><kbd>↑</kbd><span>прыжок</span></div>
+          <div><kbd>»</kbd><span>бег</span></div>
+          <div><kbd>ᚠ</kbd><span>чутьё охотника</span></div>
         </div>
         <button id="back-button" class="secondary">НАЗАД</button>
       </div>
@@ -74,6 +83,22 @@
       <div id="tooltip"></div>
       <div id="hotbar"></div>
       <div id="mining-progress"><span></span></div>
+      <div id="mobile-controls">
+        <div id="mobile-look-zone" aria-label="Обзор"></div>
+        <div id="mobile-top-actions">
+          <button id="mobile-inventory" aria-label="Открыть рюкзак">РЮКЗАК</button>
+          <button id="mobile-journal" aria-label="Открыть журнал">ЖУРНАЛ</button>
+          <button id="mobile-pause" aria-label="Открыть меню">☰</button>
+        </div>
+        <div id="mobile-move-pad" aria-label="Движение"><span id="mobile-move-knob"></span></div>
+        <div id="mobile-action-buttons">
+          <button id="mobile-sense" aria-label="Чутьё охотника">ᚠ</button>
+          <button id="mobile-sprint" aria-label="Бег">»</button>
+          <button id="mobile-jump" aria-label="Прыжок">↑</button>
+          <button id="mobile-use" aria-label="Использовать или поставить">◆</button>
+          <button id="mobile-attack" aria-label="Атаковать или добывать">⚔</button>
+        </div>
+      </div>
     </div>
 
     <section id="inventory-screen">

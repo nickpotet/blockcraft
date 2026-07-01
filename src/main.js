@@ -87,6 +87,10 @@ class BlockCraft {
     this.hadPointerLock = false;
     this.lookInput = new THREE.Vector2();
     this.lookAccum = new THREE.Vector2();
+    this.isTouch = new URLSearchParams(location.search).has('touch') || matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+    this.mobileMove = new THREE.Vector2();
+    this.mobileSprint = false;
+    document.body.classList.toggle('touch-device', this.isTouch);
     this.lastTime = performance.now();
     this.saveTimer = null;
     this.primaryHeld = false;
@@ -115,7 +119,7 @@ class BlockCraft {
     this.scene.add(this.camera);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.isTouch ? 1.25 : 1.5));
     this.renderer.setSize(innerWidth, innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -129,7 +133,7 @@ class BlockCraft {
     this.sun = new THREE.DirectionalLight(0xfff4e0, 1.8);
     this.sun.position.set(-22, 36, 18);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(this.isTouch ? 1024 : 2048, this.isTouch ? 1024 : 2048);
     Object.assign(this.sun.shadow.camera, { left: -32, right: 32, top: 32, bottom: -32, near: 1, far: 90 });
     this.sun.shadow.bias = -.0007;
     this.scene.add(this.sun, this.sun.target);
@@ -197,7 +201,7 @@ class BlockCraft {
   }
 
   initUI() {
-    for (const id of ['start-screen','pause-screen','hud','crosshair','tooltip','toast','hotbar','region-status','inventory-screen','inventory-grid','craft-list','item-details','container-section','container-grid','mining-progress','health-value','hunger-value','health-fill','hunger-fill','time-status','station-title','journal-screen','journal-content','objective-title','objective-text','objective-progress','compass-arrow','compass-distance','boss-bar','boss-name','boss-fill','damage-flash','victory-screen','victory-stats']) this[this.camel(id)] = document.querySelector(`#${id}`);
+    for (const id of ['start-screen','pause-screen','hud','crosshair','tooltip','toast','hotbar','region-status','inventory-screen','inventory-grid','craft-list','item-details','container-section','container-grid','mining-progress','health-value','hunger-value','health-fill','hunger-fill','time-status','station-title','journal-screen','journal-content','objective-title','objective-text','objective-progress','compass-arrow','compass-distance','boss-bar','boss-name','boss-fill','damage-flash','victory-screen','victory-stats','mobile-controls','mobile-look-zone','mobile-move-pad','mobile-move-knob','mobile-inventory','mobile-journal','mobile-pause','mobile-sense','mobile-sprint','mobile-jump','mobile-use','mobile-attack']) this[this.camel(id)] = document.querySelector(`#${id}`);
     this.equipmentEl = document.querySelector('#equipment');
     this.cursorStackEl = document.querySelector('#cursor-stack');
     for (let i = 0; i < 9; i++) {
@@ -301,15 +305,73 @@ class BlockCraft {
       if (event.button === 2) this.blocking = false;
     });
     document.addEventListener('contextmenu', event => event.preventDefault());
+    if (this.isTouch) this.bindMobileControls();
     addEventListener('resize', () => this.onResize());
+    addEventListener('orientationchange', () => setTimeout(() => this.onResize(), 120));
     addEventListener('beforeunload', () => this.saveWorld());
+  }
+
+  bindMobileControls() {
+    const stop = event => { event.preventDefault(); event.stopPropagation(); };
+    const release = (element, onDown, onUp) => {
+      element.addEventListener('pointerdown', event => { stop(event); element.setPointerCapture?.(event.pointerId); element.classList.add('pressed'); onDown(event); });
+      const end = event => { stop(event); element.classList.remove('pressed'); onUp(event); };
+      element.addEventListener('pointerup', end);
+      element.addEventListener('pointercancel', end);
+    };
+
+    let movePointer = null;
+    const move = event => {
+      if (event.pointerId !== movePointer) return;
+      stop(event);
+      const rect = this.mobileMovePad.getBoundingClientRect();
+      const radius = rect.width * .36;
+      let x = (event.clientX - rect.left - rect.width / 2) / radius;
+      let y = (event.clientY - rect.top - rect.height / 2) / radius;
+      const length = Math.hypot(x,y);
+      if (length > 1) { x /= length; y /= length; }
+      this.mobileMove.set(x,-y);
+      this.mobileMoveKnob.style.transform = `translate(${x*34}px, ${y*34}px)`;
+    };
+    this.mobileMovePad.addEventListener('pointerdown', event => { stop(event);movePointer=event.pointerId;this.mobileMovePad.setPointerCapture?.(event.pointerId);move(event); });
+    this.mobileMovePad.addEventListener('pointermove', move);
+    const stopMove = event => { if(event.pointerId!==movePointer)return;stop(event);movePointer=null;this.mobileMove.set(0,0);this.mobileMoveKnob.style.transform='translate(0, 0)'; };
+    this.mobileMovePad.addEventListener('pointerup', stopMove);
+    this.mobileMovePad.addEventListener('pointercancel', stopMove);
+
+    let lookPointer = null, lookX = 0, lookY = 0;
+    this.mobileLookZone.addEventListener('pointerdown', event => { stop(event);lookPointer=event.pointerId;lookX=event.clientX;lookY=event.clientY;this.mobileLookZone.setPointerCapture?.(event.pointerId); });
+    this.mobileLookZone.addEventListener('pointermove', event => { if(event.pointerId!==lookPointer)return;stop(event);this.lookAccum.x+=(event.clientX-lookX)*1.15;this.lookAccum.y+=(event.clientY-lookY)*1.15;lookX=event.clientX;lookY=event.clientY; });
+    const stopLook = event => { if(event.pointerId!==lookPointer)return;stop(event);lookPointer=null; };
+    this.mobileLookZone.addEventListener('pointerup', stopLook);
+    this.mobileLookZone.addEventListener('pointercancel', stopLook);
+
+    release(this.mobileAttack, () => { if(this.playing){this.tryAttack();this.primaryHeld=true;} }, () => { this.primaryHeld=false;this.resetMining(); });
+    release(this.mobileUse, () => { if(this.playing)this.useSelected(); }, () => { this.blocking=false; });
+    release(this.mobileJump, () => this.keys.add('Space'), () => this.keys.delete('Space'));
+    release(this.mobileSprint, () => this.mobileSprint=true, () => this.mobileSprint=false);
+    release(this.mobileSense, () => { if(this.playing){this.senseActive=true;this.audio.play('sense');} }, () => this.senseActive=false);
+    this.mobileInventory.addEventListener('pointerdown', event => { stop(event);this.openInventory(); });
+    this.mobileJournal.addEventListener('pointerdown', event => { stop(event);this.openJournal(); });
+    this.mobilePause.addEventListener('pointerdown', event => { stop(event);this.pauseGame(); });
+  }
+
+  resetMobileControls() {
+    this.mobileMove.set(0,0);
+    this.mobileSprint = false;
+    this.primaryHeld = false;
+    this.blocking = false;
+    this.senseActive = false;
+    this.keys.delete('Space');
+    if (this.mobileMoveKnob) this.mobileMoveKnob.style.transform = 'translate(0, 0)';
+    document.querySelectorAll('#mobile-controls .pressed').forEach(element => element.classList.remove('pressed'));
   }
 
   lock() {
     this.audio.unlock();
     this.music.unlock();
     this.startPlaying();
-    try { this.renderer.domElement.requestPointerLock()?.catch(() => {}); } catch {}
+    if (!this.isTouch) try { this.renderer.domElement.requestPointerLock()?.catch(() => {}); } catch {}
   }
 
   startPlaying() {
@@ -329,6 +391,7 @@ class BlockCraft {
   pauseGame() {
     this.playing = false;
     this.keys.clear();
+    this.resetMobileControls();
     this.pauseScreen.classList.add('visible');
     this.hud.style.display = 'none';
     this.crosshair.style.display = 'none';
@@ -350,6 +413,7 @@ class BlockCraft {
     this.journalOpen = true;
     this.playing = false;
     this.keys.clear();
+    this.resetMobileControls();
     this.audio.play('ui_open');
     if (document.pointerLockElement) document.exitPointerLock();
     this.hud.style.display = 'none';
@@ -367,6 +431,7 @@ class BlockCraft {
   }
 
   onLockChange() {
+    if (this.isTouch) return;
     const locked = document.pointerLockElement === this.renderer.domElement;
     if (locked) { this.hadPointerLock = true; this.startPlaying(); }
     else if (this.hadPointerLock && !this.inventoryOpen && !this.journalOpen) { this.hadPointerLock = false; this.pauseGame(); }
@@ -435,6 +500,7 @@ class BlockCraft {
     this.inventoryOpen = true;
     this.playing = false;
     this.keys.clear();
+    this.resetMobileControls();
     this.audio.play('ui_open');
     this.stationContext = station ?? this.nearbyStation() ?? 'hand';
     this.chestContext = chestKey;
@@ -540,7 +606,7 @@ class BlockCraft {
     if (stack) button.innerHTML = `<img src="${ITEM_ICON(stack.id)}" alt=""><b>${stack.count > 1 ? stack.count : ''}</b>${stack.durability != null ? `<span style="--d:${stack.durability / ITEMS[stack.id].durability}"></span>` : ''}`;
     button.title = stack ? ITEMS[stack.id].name : '';
     if (!equipment) {
-      button.addEventListener('click', () => this.handleSlotClick(source, index));
+      button.addEventListener('click', () => { if(stack)this.showItem(stack.id);this.handleSlotClick(source, index); });
       button.addEventListener('contextmenu', event => { event.preventDefault(); this.handleSlotRightClick(source, index); });
     }
     if (stack) button.addEventListener('mouseenter', () => this.showItem(stack.id));
@@ -1246,7 +1312,7 @@ class BlockCraft {
   updatePlayer(dt) {
     if(!this.playing)return;{const kx=(this.keys.has('ArrowRight')?1:0)-(this.keys.has('ArrowLeft')?1:0),ky=(this.keys.has('ArrowDown')?1:0)-(this.keys.has('ArrowUp')?1:0);if(kx||ky){this.yaw-=kx*1.8*dt;this.pitch=THREE.MathUtils.clamp(this.pitch-ky*1.5*dt,-1.54,1.54);}}
     if(this.lookAccum.x||this.lookAccum.y){this.yaw-=this.lookAccum.x*this.settings.sensitivity;this.pitch=THREE.MathUtils.clamp(this.pitch-this.lookAccum.y*this.settings.sensitivity,-1.54,1.54);this.lookAccum.set(0,0);}
-    const wasGrounded=this.player.grounded;const input=new THREE.Vector2((this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0),(this.keys.has('KeyW')?1:0)-(this.keys.has('KeyS')?1:0));if(input.lengthSq()>1)input.normalize();const sprint=this.keys.has('ShiftLeft')&&this.hunger>0,speed=sprint?7:5,sin=Math.sin(this.yaw),cos=Math.cos(this.yaw);const tx=(input.x*cos-input.y*sin)*speed,tz=(-input.x*sin-input.y*cos)*speed,accel=this.player.grounded?18:7;this.velocity.x=THREE.MathUtils.damp(this.velocity.x,tx,accel,dt);this.velocity.z=THREE.MathUtils.damp(this.velocity.z,tz,accel,dt);this.velocity.y-=22*dt;if(this.keys.has('Space')&&this.player.grounded){this.velocity.y=8.2;this.player.grounded=false;this.audio.play('jump');}this.player.grounded=false;const fallV=this.velocity.y;this.moveAndCollide('x',this.velocity.x*dt);this.moveAndCollide('z',this.velocity.z*dt);this.moveAndCollide('y',this.velocity.y*dt);if(this.player.grounded&&!wasGrounded&&fallV<-6)this.audio.play('land');this.stepTimer=(this.stepTimer??0)-dt;if(this.player.grounded&&input.lengthSq()>0&&this.stepTimer<=0){this.stepTimer=sprint?.3:.42;this.audio.play(this.footstepSound());}if(sprint&&input.lengthSq())this.hunger=Math.max(0,this.hunger-dt*.045);if(this.player.position.y<-10)this.takeDamage(99);this.camera.position.copy(this.player.position).add(new THREE.Vector3(0,this.player.eye,0));this.camera.rotation.set(this.pitch,this.yaw,0);
+    const wasGrounded=this.player.grounded;const input=new THREE.Vector2((this.keys.has('KeyD')?1:0)-(this.keys.has('KeyA')?1:0)+this.mobileMove.x,(this.keys.has('KeyW')?1:0)-(this.keys.has('KeyS')?1:0)+this.mobileMove.y);if(input.lengthSq()>1)input.normalize();const sprint=(this.keys.has('ShiftLeft')||this.mobileSprint)&&this.hunger>0,speed=sprint?7:5,sin=Math.sin(this.yaw),cos=Math.cos(this.yaw);const tx=(input.x*cos-input.y*sin)*speed,tz=(-input.x*sin-input.y*cos)*speed,accel=this.player.grounded?18:7;this.velocity.x=THREE.MathUtils.damp(this.velocity.x,tx,accel,dt);this.velocity.z=THREE.MathUtils.damp(this.velocity.z,tz,accel,dt);this.velocity.y-=22*dt;if(this.keys.has('Space')&&this.player.grounded){this.velocity.y=8.2;this.player.grounded=false;this.audio.play('jump');}this.player.grounded=false;const fallV=this.velocity.y;this.moveAndCollide('x',this.velocity.x*dt);this.moveAndCollide('z',this.velocity.z*dt);this.moveAndCollide('y',this.velocity.y*dt);if(this.player.grounded&&!wasGrounded&&fallV<-6)this.audio.play('land');this.stepTimer=(this.stepTimer??0)-dt;if(this.player.grounded&&input.lengthSq()>0&&this.stepTimer<=0){this.stepTimer=sprint?.3:.42;this.audio.play(this.footstepSound());}if(sprint&&input.lengthSq())this.hunger=Math.max(0,this.hunger-dt*.045);if(this.player.position.y<-10)this.takeDamage(99);this.camera.position.copy(this.player.position).add(new THREE.Vector3(0,this.player.eye,0));this.camera.rotation.set(this.pitch,this.yaw,0);
     this.ensureChunksAt(this.worldToChunk(this.player.position.x),this.worldToChunk(this.player.position.z));
   }
 
@@ -1470,7 +1536,7 @@ class BlockCraft {
   }
   swingHeld() { if(!this.heldRoot.children.length)return;this.heldRoot.rotation.x=-.9;setTimeout(()=>this.heldRoot.rotation.x=0,130); }
 
-  onResize() { this.camera.aspect=innerWidth/innerHeight;this.camera.updateProjectionMatrix();this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));this.renderer.setSize(innerWidth,innerHeight); }
+  onResize() { this.camera.aspect=innerWidth/innerHeight;this.camera.updateProjectionMatrix();this.renderer.setPixelRatio(Math.min(devicePixelRatio,this.isTouch?1.25:1.5));this.renderer.setSize(innerWidth,innerHeight); }
   animate() {
     requestAnimationFrame(()=>this.animate());const now=performance.now(),dt=Math.min((now-this.lastTime)/1000,.05);this.lastTime=now;this.updatePlayer(dt);this.updateMining(dt);this.updateSurvival(dt);this.updateDayNight(dt);this.updateQuestWorld();this.updateEnemies(dt);this.updateDrops(dt);this.updateParticles(dt);this.updateSense(dt);this.updateLights();this.updateTarget();this.renderBossBar();this.updateMusic(dt);this.updateAmbient(dt);this.clouds.position.x=((now*.00035+70)%140)-70;this.renderer.render(this.scene,this.camera);
   }
