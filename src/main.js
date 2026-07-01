@@ -14,6 +14,10 @@ const SEA_LEVEL = 4;
 const REACH = 6;
 const SAVE_KEY = 'blockcraft-world-v4';
 
+// Радиусы выравниваемой площадки под каждой локацией (chebyshev-полуразмер) + ширина плавного ската.
+const FEATURE_FLAT = { starter_camp: 5, wolf_lair: 7, bog_ruins: 8, old_shrine: 7, ancient_grove: 8 };
+const FLAT_BLEND = 3;
+
 const BLOCKS = {
   grass: { name: 'Дёрн', hardness: .55, tool: 'shovel', drop: 'grass', handDrop: true },
   dirt: { name: 'Земля', hardness: .5, tool: 'shovel', drop: 'dirt', handDrop: true },
@@ -722,6 +726,31 @@ class BlockCraft {
   }
   terrainHeight(x, z, seed) { return Math.max(2, Math.floor(2.5 + this.noise(x,z,seed,15)*5 + this.noise(x,z,seed+91,6)*2.8 + Math.sin(x*.14)*Math.cos(z*.12)*.9)); }
 
+  // Высота столбца с учётом выравнивания под локациями: внутри площадки — база локации,
+  // на кольце шириной FLAT_BLEND — плавный переход к естественному рельефу.
+  columnHeight(x, z) {
+    const natural = this.terrainHeight(x, z, this.seed);
+    let best = null;
+    for (const f of this.features) {
+      const r = FEATURE_FLAT[f.id]; if (r == null) continue;
+      const d = Math.max(Math.abs(x - f.x), Math.abs(z - f.z));
+      if (d > r + FLAT_BLEND) continue;
+      const w = d <= r ? 1 : 1 - (d - r) / FLAT_BLEND;
+      if (!best || w > best.w) best = { base: Math.round(f.y - 0.5), w };
+    }
+    if (!best) return natural;
+    return Math.max(2, Math.round(natural * (1 - best.w) + best.base * best.w));
+  }
+
+  // (x,z) на выровненной площадке локации (без ската) — там не сажаем деревья.
+  onFeaturePlaza(x, z) {
+    for (const f of this.features) {
+      const r = FEATURE_FLAT[f.id]; if (r == null) continue;
+      if (Math.max(Math.abs(x - f.x), Math.abs(z - f.z)) <= r + 1) return true;
+    }
+    return false;
+  }
+
   generateWorld(seed) {
     this.seed = seed; this.world.clear(); this.edits.clear(); this.loadedChunks.clear(); this.currentChunk = null;
     this.quest = this.makeQuestSystem();
@@ -736,7 +765,7 @@ class BlockCraft {
   generateChunkBase(cx, cz) {
     const { minX,maxX,minZ,maxZ } = this.chunkBounds(cx,cz);
     for (let x=minX;x<=maxX;x++) for (let z=minZ;z<=maxZ;z++) {
-      const height=this.terrainHeight(x,z,this.seed); this.setBlock(x,0,z,'bedrock');
+      const height=this.columnHeight(x,z); this.setBlock(x,0,z,'bedrock');
       for (let y=1;y<=height;y++) {
         let type='stone';
         if (y===height) type=height<=SEA_LEVEL+1?'sand':'grass';
@@ -756,7 +785,8 @@ class BlockCraft {
   decorateChunk(cx,cz) {
     const bounds=this.chunkBounds(cx,cz);
     for (let x=bounds.minX-2;x<=bounds.maxX+2;x++) for (let z=bounds.minZ-2;z<=bounds.maxZ+2;z++) {
-      const height=this.terrainHeight(x,z,this.seed), chance=this.hash(x*3,z*3,this.seed+444);
+      if (this.onFeaturePlaza(x,z)) continue; // не засаживаем деревьями площадки локаций
+      const height=this.columnHeight(x,z), chance=this.hash(x*3,z*3,this.seed+444);
       if (height>SEA_LEVEL+1&&chance>.975&&Math.hypot(x,z)>5) this.addTreeInChunk(x,height+1,z,chance>.993?5:4,bounds);
     }
   }
@@ -847,55 +877,140 @@ class BlockCraft {
     this.featureObjects = [];
   }
 
-  featureBox(group, size, position, color, emissive = 0x000000) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), new THREE.MeshLambertMaterial({ color, emissive, emissiveIntensity: emissive ? .45 : 0 }));
+  featureBox(group, size, position, color, emissive = 0x000000, rot = null) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), new THREE.MeshLambertMaterial({ color, emissive, emissiveIntensity: emissive ? .55 : 0 }));
     mesh.position.set(...position);
+    if (rot) mesh.rotation.set(rot[0] || 0, rot[1] || 0, rot[2] || 0);
     mesh.castShadow = true;
     group.add(mesh);
     return mesh;
   }
 
+  // Кострище: кольцо камней, брёвна крестом и светящееся пламя (или холодная зола).
+  featureFire(group, x, z, s = 1, cold = false) {
+    for (const [ox, oz] of [[-.5, 0], [.5, 0], [0, -.5], [0, .5]]) this.featureBox(group, [.34 * s, .24 * s, .34 * s], [x + ox * s, .12 * s, z + oz * s], 0x585c58);
+    this.featureBox(group, [.95 * s, .16 * s, .22 * s], [x, .2 * s, z], cold ? 0x2c2824 : 0x4a2c18, 0, [0, .5, 0]);
+    this.featureBox(group, [.95 * s, .16 * s, .22 * s], [x, .2 * s, z], cold ? 0x2c2824 : 0x4a2c18, 0, [0, -.4, 0]);
+    if (cold) { this.featureBox(group, [.5 * s, .12 * s, .5 * s], [x, .16 * s, z], 0x35322c); return; }
+    this.featureBox(group, [.36 * s, .5 * s, .36 * s], [x, .5 * s, z], 0xff6a1e, 0xff6a1e);
+    this.featureBox(group, [.2 * s, .34 * s, .2 * s], [x, .84 * s, z], 0xffc74e, 0xffc74e);
+  }
+
+  buildStarterCamp(group) {
+    const wood = 0x6b4a2a, plank = 0x9a6f3e;
+    this.featureBox(group, [5.4, .2, 5.4], [0, .08, 0], 0x6a4a2b);
+    this.featureBox(group, [5.4, .06, 5.4], [0, .2, 0], 0x835c37);
+    // навес-лежанка
+    this.featureBox(group, [.24, 1.9, .24], [-1.7, .95, -1.9], wood);
+    this.featureBox(group, [.24, 1.9, .24], [1.7, .95, -1.9], wood);
+    this.featureBox(group, [.24, 1.2, .24], [-1.7, .6, .3], wood);
+    this.featureBox(group, [.24, 1.2, .24], [1.7, .6, .3], wood);
+    this.featureBox(group, [3.8, .16, 2.8], [0, 1.45, -.8], plank, 0, [-0.5, 0, 0]);
+    this.featureBox(group, [3.4, .12, 1.9], [0, .34, -1.4], 0x7a5a3a);
+    // поленница, сушилка со шкурой, костёр
+    for (let i = 0; i < 3; i++) this.featureBox(group, [1.5, .3, .32], [2.1, .16 + i * .32, 1.7], wood, 0, [0, .2, 0]);
+    this.featureBox(group, [.2, 1.3, .2], [-2.3, .65, 1.1], wood);
+    this.featureBox(group, [.2, 1.3, .2], [-2.3, .65, 2.4], wood);
+    this.featureBox(group, [.2, .1, 1.4], [-2.3, 1.25, 1.75], wood);
+    this.featureBox(group, [.9, .95, .08], [-2.3, .62, 1.75], 0x8a6038);
+    this.featureFire(group, 0, 1.7, 1);
+  }
+
+  buildWolfLair(group) {
+    const rock = 0x565a57, rockD = 0x43473f, bone = 0xd8cbb0, earth = 0x3a2c20;
+    this.featureBox(group, [6.2, .2, 6.2], [0, .08, 0], earth);
+    // логово: валуны полукругом с тёмным входом
+    for (const [x, z, w, h] of [[-2.7, -2.1, 1.9, 2.5], [2.7, -2.1, 1.9, 2.5], [-3.1, .5, 1.6, 2.0], [3.1, .5, 1.6, 2.0], [-1.5, -3.1, 1.8, 2.3], [1.5, -3.1, 1.8, 2.3]]) this.featureBox(group, [w, h, w], [x, h / 2, z], rock);
+    this.featureBox(group, [3.6, 2.3, 1.4], [0, 1.15, -3.1], rockD);
+    this.featureBox(group, [1.7, 1.5, 1.1], [0, .75, -2.5], 0x120f0d);
+    // кости, рёбра, череп
+    for (const [x, z, r] of [[-1.3, 1.5, .5], [1.5, .6, -.4], [.4, 2.1, .2], [-2.1, 1.0, -.3]]) this.featureBox(group, [.95, .14, .14], [x, .12, z], bone, 0, [0, r, 0]);
+    for (let i = 0; i < 4; i++) this.featureBox(group, [.12, .75, .12], [-.6 + i * .4, .38, 1.4], bone, 0, [0, 0, (i - 1.5) * .28]);
+    this.featureBox(group, [.55, .45, .55], [1.0, .24, 1.7], bone);
+    // тотем с волчьим черепом
+    this.featureBox(group, [.3, 2.3, .3], [-2.5, 1.15, -1.5], 0x4a3324);
+    this.featureBox(group, [.75, .6, .55], [-2.5, 2.35, -1.5], bone);
+    this.featureBox(group, [.16, .16, .12], [-2.66, 2.4, -1.24], 0x201512);
+    this.featureBox(group, [.16, .16, .12], [-2.34, 2.4, -1.24], 0x201512);
+    this.featureFire(group, 1.3, 1.4, 1, true);
+  }
+
+  buildBogRuins(group) {
+    const stone = 0x6a6f66, moss = 0x47563f, dark = 0x4b5049, green = 0x53c46a;
+    this.featureBox(group, [8, .22, 7], [0, .08, 0], moss);
+    for (const [x, z, h] of [[-3, -2, 3.2], [3, -2.5, 2.2], [-3.2, 2, 1.6], [2.8, 2.2, 2.8], [0.2, 3.0, 1.4]]) {
+      this.featureBox(group, [.9, h, .9], [x, h / 2, z], stone);
+      this.featureBox(group, [1.0, .3, 1.0], [x, h, z], dark);
+      this.featureBox(group, [.98, .18, .98], [x, .12, z], moss);
+    }
+    // поваленная колонна
+    this.featureBox(group, [.8, 3.0, .8], [-1.4, .5, 3.2], stone, 0, [0, .25, Math.PI / 2]);
+    // арка
+    this.featureBox(group, [.8, 2.7, .8], [-1.4, 1.35, -2.7], stone);
+    this.featureBox(group, [.8, 2.7, .8], [1.4, 1.35, -2.7], stone);
+    this.featureBox(group, [3.6, .6, .8], [0, 2.8, -2.7], dark);
+    for (const [x, z] of [[1.7, 1.3], [-2.1, .3], [.6, 2.3]]) this.featureBox(group, [.7, .5, .7], [x, .27, z], moss);
+    // болотные фонари с зеленоватым огнём
+    for (const [x, z] of [[-2.7, -.6], [2.7, -.6]]) { this.featureBox(group, [.2, 1.5, .2], [x, .75, z], 0x3a4038); this.featureBox(group, [.36, .42, .36], [x, 1.6, z], green, green); }
+  }
+
+  buildOldShrine(group) {
+    const stone = 0x5a5d58, dark = 0x3b3d3a, light = 0x74776f, rune = 0x8a1c1c;
+    this.featureBox(group, [7, .3, 7], [0, .12, 0], stone);
+    this.featureBox(group, [5, .3, 5], [0, .32, 0], light);
+    this.featureBox(group, [3.4, .3, 3.4], [0, .5, 0], stone);
+    // менгиры с рунами
+    for (const [x, z] of [[-2.7, -2.7], [2.7, -2.7], [-2.7, 2.7], [2.7, 2.7]]) {
+      this.featureBox(group, [.7, 3.3, .7], [x, 1.65, z], stone);
+      this.featureBox(group, [.85, .5, .85], [x, 3.4, z], dark);
+      this.featureBox(group, [.22, .7, .22], [x, 1.8, z + .37], rune, rune);
+    }
+    // тёмный идол
+    this.featureBox(group, [1.4, 1.5, 1.0], [0, 1.4, 0], dark, 0x2a0810);
+    this.featureBox(group, [.95, .95, .72], [0, 2.4, 0], dark);
+    this.featureBox(group, [.24, .18, .18], [-.26, 2.5, .37], rune, rune);
+    this.featureBox(group, [.24, .18, .18], [.26, 2.5, .37], rune, rune);
+  }
+
+  buildAncientGrove(group) {
+    const bark = 0x3b2b20, stone = 0x3a423a, rune = 0x8a1f1f, moss = 0x2f4a2c;
+    this.featureBox(group, [10, .3, 10], [0, .12, 0], stone);
+    this.featureBox(group, [7.6, .3, 7.6], [0, .32, 0], 0x333b33);
+    // рунический круг
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; this.featureBox(group, [.4, .08, .4], [Math.cos(a) * 3.2, .49, Math.sin(a) * 3.2], rune, rune); }
+    this.featureBox(group, [4.8, .06, .3], [0, .48, 0], rune, rune);
+    this.featureBox(group, [.3, .06, 4.8], [0, .48, 0], rune, rune);
+    // деревья-тотемы по углам
+    for (const [x, z] of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) {
+      this.featureBox(group, [1.0, 5.6, 1.0], [x, 2.8, z], bark);
+      this.featureBox(group, [1.7, 1.5, 1.7], [x, 5.7, z], moss);
+      this.featureBox(group, [.3, 1.5, .3], [x - .55, 6.5, z], bark, 0, [0, 0, -.4]);
+      this.featureBox(group, [.3, 1.5, .3], [x + .55, 6.5, z], bark, 0, [0, 0, .4]);
+      this.featureBox(group, [.24, .24, .2], [x, 4.5, z + .56], rune, rune);
+    }
+    for (const [x, z, r] of [[-1.5, 1.7, .4], [1.7, 1.2, -.3], [.6, 2.1, .1]]) this.featureBox(group, [.85, .14, .14], [x, .44, z], 0xd8cbb0, 0, [0, r, 0]);
+  }
+
   buildFeatureMeshes() {
     this.clearFeatureMeshes();
-    const clueOffsets = [[-3,0,-2],[2,0,-3],[3,0,2],[-2,0,3]];
+    const clueOffsets = [[-3, -2], [3, -2], [3, 2], [-3, 2], [0, 3], [0, -3]];
     for (const feature of this.features) {
       const group = new THREE.Group();
       group.position.set(feature.x, feature.y, feature.z);
       group.userData.featureId = feature.id;
-      if (feature.id === 'starter_camp') {
-        this.featureBox(group,[3,.25,3],[0,.12,0],0x493a2c);
-        this.featureBox(group,[2,.25,.25],[0,.42,0],0x705033);
-        this.featureBox(group,[.25,.25,2],[0,.42,0],0x705033);
-      } else if (feature.id === 'wolf_lair') {
-        for (const [x,z] of [[-2,-1],[2,-1],[-2,2],[2,2]]) this.featureBox(group,[1.6,1.2,1.4],[x,.5,z],0x4c514b);
-        this.featureBox(group,[4,.18,4],[0,.1,0],0x302a25);
-      } else if (feature.id === 'bog_ruins') {
-        for (const [x,z,h] of [[-3,-2,3],[3,-2,2],[-3,2,2],[3,2,3]]) this.featureBox(group,[.8,h,.8],[x,h/2,z],0x4b514c);
-        this.featureBox(group,[7,.25,6],[0,.12,0],0x39443d);
-      } else if (feature.id === 'old_shrine') {
-        this.featureBox(group,[6,.3,6],[0,.15,0],0x4b4d49);
-        for (const x of [-2.3,2.3]) this.featureBox(group,[.6,3,.6],[x,1.5,0],0x555754);
-        this.featureBox(group,[2,1,1],[0,.5,0],0x3c3e3b,0x211018);
-      } else {
-        this.featureBox(group,[9,.35,9],[0,.17,0],0x334131);
-        for (const [x,z] of [[-4,-4],[4,-4],[-4,4],[4,4]]) {
-          this.featureBox(group,[.8,5,.8],[x,2.5,z],0x3b2b20);
-          this.featureBox(group,[2.5,1.8,2.5],[x,5,z],0x263c2c);
-        }
-        const altar = this.featureBox(group,[2,1.5,2],[0,.75,0],0x414641,0x4e1018);
-        altar.userData.interaction = { kind:'bossRitual', featureId:feature.id, id:'leshy-altar' };
-        this.featureObjects.push(altar);
-      }
+      if (feature.id === 'starter_camp') this.buildStarterCamp(group);
+      else if (feature.id === 'wolf_lair') this.buildWolfLair(group);
+      else if (feature.id === 'bog_ruins') this.buildBogRuins(group);
+      else if (feature.id === 'old_shrine') this.buildOldShrine(group);
+      else this.buildAncientGrove(group);
 
-      feature.clues.forEach((clueId,index) => {
-        const [cx,,cz] = clueOffsets[index % clueOffsets.length];
-        // topSolidY возвращает ЦЕНТР верхнего блока; поверхность на +0.5.
-        // Улика высотой в 1 блок стоит на поверхности: центр на surface + полвысоты.
-        const groundY = this.topSolidY(Math.round(feature.x + cx), Math.round(feature.z + cz));
-        const localY = groundY + 0.5 + 0.5 - feature.y;
-        const clue = this.featureBox(group,[.55,1.0,.55],[cx, localY, cz],0x6a1b1b,0x7d1010);
+      // Улики: земля под локацией выровнена, поэтому поверхность = feature.y и высота улики
+      // константна (не зависит от того, прогружены ли чанки локации).
+      feature.clues.forEach((clueId, index) => {
+        const [cx, cz] = clueOffsets[index % clueOffsets.length];
+        const clue = this.featureBox(group, [.55, 1.0, .55], [cx, .55, cz], 0x6a1b1b, 0x7d1010);
         clue.rotation.y = index * .9;
-        clue.userData.interaction = { kind:'clue', featureId:feature.id, id:clueId };
+        clue.userData.interaction = { kind: 'clue', featureId: feature.id, id: clueId };
         clue.visible = true;
         clue.material.transparent = true;
         clue.material.opacity = 0.05;
@@ -904,11 +1019,20 @@ class BlockCraft {
       });
 
       if (feature.id === 'old_shrine') {
-        [[-2,0,2],[2,0,2],[0,0,-2.4]].forEach(([x,,z],index) => {
-          const brazier = this.featureBox(group,[.65,.8,.65],[x,.4,z],0x55462f,feature.lit.includes(index)?0xb94d1e:0x120805);
-          brazier.userData.interaction = { kind:'ritual', featureId:feature.id, id:`shrine-fire-${index}`, index };
+        [[-2.4, 2.4], [2.4, 2.4], [0, -2.6]].forEach(([x, z], index) => {
+          this.featureBox(group, [.7, .5, .7], [x, .55, z], 0x4a4038); // пьедестал
+          const brazier = this.featureBox(group, [.6, .8, .6], [x, 1.1, z], 0x55462f, feature.lit.includes(index) ? 0xb94d1e : 0x120805);
+          brazier.userData.interaction = { kind: 'ritual', featureId: feature.id, id: `shrine-fire-${index}`, index };
           this.featureObjects.push(brazier);
         });
+      }
+
+      if (feature.id === 'ancient_grove') {
+        this.featureBox(group, [2.4, .4, 2.4], [0, .5, 0], 0x2c332c); // основание алтаря
+        const altar = this.featureBox(group, [2, 1.4, 2], [0, 1.35, 0], 0x414641, 0x4e1018);
+        this.featureBox(group, [1.7, .18, 1.7], [0, 2.1, 0], 0x8a1f1f, 0x8a1f1f); // светящаяся плита
+        altar.userData.interaction = { kind: 'bossRitual', featureId: feature.id, id: 'leshy-altar' };
+        this.featureObjects.push(altar);
       }
       this.scene.add(group);
       this.featureGroups.push(group);
@@ -1266,9 +1390,15 @@ class BlockCraft {
   showToast(message) { this.toast.textContent=message;this.toast.classList.add('show');clearTimeout(this.toastTimer);this.toastTimer=setTimeout(()=>this.toast.classList.remove('show'),1800); }
 
   rebuildHeldItem() {
-    while(this.heldRoot.children.length){const child=this.heldRoot.children.pop();child.geometry?.dispose();child.material?.dispose();}
-    const stack=this.selectedStack();if(!stack)return;const item=ITEMS[stack.id],material=new THREE.MeshLambertMaterial({color:this.itemColor(stack.id)});let geometry;
-    if(['weapon','tool','ranged'].includes(item.action))geometry=new THREE.BoxGeometry(item.action==='ranged' ? .7 : .16,item.action==='ranged' ? .18 : .85,.14);else if(item.action==='place')geometry=new THREE.BoxGeometry(.38,.38,.38);else geometry=new THREE.BoxGeometry(.28,.28,.18);const mesh=new THREE.Mesh(geometry,material);mesh.rotation.set(-.35,0,-.3);this.heldRoot.add(mesh);
+    while(this.heldRoot.children.length){const child=this.heldRoot.children.pop();child.geometry?.dispose();child.material?.map?.dispose();child.material?.dispose();}
+    const stack=this.selectedStack();if(!stack)return;
+    // В руке — та же иконка, что в инвентаре: пиксельная текстура на плоскости, без освещения.
+    const texture=this.textureLoader.load(ITEM_ICON(stack.id));
+    texture.colorSpace=THREE.SRGBColorSpace;texture.magFilter=texture.minFilter=THREE.NearestFilter;
+    const material=new THREE.MeshBasicMaterial({map:texture,alphaTest:.5,side:THREE.DoubleSide,toneMapped:false});
+    const mesh=new THREE.Mesh(new THREE.PlaneGeometry(.62,.62),material);
+    mesh.rotation.set(-.12,-.5,-.1);
+    this.heldRoot.add(mesh);
   }
   swingHeld() { if(!this.heldRoot.children.length)return;this.heldRoot.rotation.x=-.9;setTimeout(()=>this.heldRoot.rotation.x=0,130); }
 
