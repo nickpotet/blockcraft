@@ -5,7 +5,7 @@ import { RECIPES } from './data/recipes.js';
 import { Inventory } from './systems/inventory.js';
 import { EnemySystem } from './systems/enemies.js';
 import { QuestSystem } from './systems/quests.js';
-import { GameAudio } from './systems/audio.js';
+import { GameAudio, GameMusic } from './systems/audio.js';
 import { QUESTS } from './data/quests.js';
 
 const CHUNK_SIZE = 16;
@@ -80,6 +80,7 @@ class BlockCraft {
     this.runStats = { startedAt: Date.now(), deaths: 0, crafted: 0, killed: 0 };
     this.settings = this.loadSettings();
     this.audio = new GameAudio(this.settings.volume);
+    this.music = new GameMusic(this.settings.volume);
     this.yaw = 0;
     this.pitch = 0;
     this.playing = false;
@@ -211,6 +212,10 @@ class BlockCraft {
   camel(value) { return value.replace(/-([a-z])/g, (_, char) => char.toUpperCase()); }
 
   bindEvents() {
+    // Музыка меню стартует по первому жесту пользователя (автоплей иначе заблокирован браузером).
+    const startMusic = () => this.music.unlock();
+    document.addEventListener('pointerdown', startMusic, { once: true });
+    document.addEventListener('keydown', startMusic, { once: true });
     document.querySelector('#play-button').addEventListener('click', () => this.lock());
     document.querySelector('#resume-button').addEventListener('click', () => this.lock());
     document.querySelector('#new-world-button').addEventListener('click', () => this.createNewWorld());
@@ -302,6 +307,7 @@ class BlockCraft {
 
   lock() {
     this.audio.unlock();
+    this.music.unlock();
     this.startPlaying();
     try { this.renderer.domElement.requestPointerLock()?.catch(() => {}); } catch {}
   }
@@ -330,7 +336,7 @@ class BlockCraft {
 
   updateSetting(key, value) {
     this.settings[key] = value;
-    if (key === 'volume') this.audio.setVolume(value);
+    if (key === 'volume') { this.audio.setVolume(value); this.music.setVolume(value); }
     if (key === 'renderDistance') {
       this.loadedChunks.clear();
       this.currentChunk = null;
@@ -1361,6 +1367,20 @@ class BlockCraft {
     if (changed) this.buildWorldMeshes();
   }
 
+  inCombat() {
+    const p = this.player.position;
+    return this.enemies.enemies.some(enemy => {
+      const d = enemy.group.position.distanceTo(p);
+      return (enemy.def.elite || enemy.def.boss) ? d < 40 : d < 15;
+    });
+  }
+
+  updateMusic(dt) {
+    const inWorld = this.playing || this.inventoryOpen || this.journalOpen;
+    this.music.play(!inWorld ? 'menu' : (this.inCombat() ? 'combat' : 'ambient'));
+    this.music.update(dt);
+  }
+
   renderBossBar() {
     if (!this.bossBar) return;
     const elite = this.enemies.enemies.find(enemy => enemy.def.elite && enemy.group.position.distanceTo(this.player.position) < 34);
@@ -1404,7 +1424,7 @@ class BlockCraft {
 
   onResize() { this.camera.aspect=innerWidth/innerHeight;this.camera.updateProjectionMatrix();this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));this.renderer.setSize(innerWidth,innerHeight); }
   animate() {
-    requestAnimationFrame(()=>this.animate());const now=performance.now(),dt=Math.min((now-this.lastTime)/1000,.05);this.lastTime=now;this.updatePlayer(dt);this.updateMining(dt);this.updateSurvival(dt);this.updateDayNight(dt);this.updateQuestWorld();this.updateEnemies(dt);this.updateDrops(dt);this.updateParticles(dt);this.updateSense(dt);this.updateLights();this.updateTarget();this.renderBossBar();this.clouds.position.x=((now*.00035+70)%140)-70;this.renderer.render(this.scene,this.camera);
+    requestAnimationFrame(()=>this.animate());const now=performance.now(),dt=Math.min((now-this.lastTime)/1000,.05);this.lastTime=now;this.updatePlayer(dt);this.updateMining(dt);this.updateSurvival(dt);this.updateDayNight(dt);this.updateQuestWorld();this.updateEnemies(dt);this.updateDrops(dt);this.updateParticles(dt);this.updateSense(dt);this.updateLights();this.updateTarget();this.renderBossBar();this.updateMusic(dt);this.clouds.position.x=((now*.00035+70)%140)-70;this.renderer.render(this.scene,this.camera);
   }
 }
 
