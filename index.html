@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#87c7f0" />
+    <title>BlockCraft</title>
+  </head>
+  <body>
+    <div id="game"></div>
+    <div id="vignette"></div>
+    <div id="crosshair"><span></span><span></span></div>
+
+    <section id="start-screen" class="screen visible">
+      <div class="edition-badge">ТЁМНОЕ ФЭНТЕЗИ</div>
+      <div class="sigil" aria-hidden="true">ᛉ</div>
+      <div class="logo" aria-label="BlockCraft">
+        <span>BLOCK</span><span>CRAFT</span>
+      </div>
+      <p class="tagline">Каждый тракт скрывает свою легенду</p>
+      <div id="menu-panel" class="menu-panel">
+        <button id="play-button" class="primary">В ПУТЬ</button>
+        <button id="menu-new-world-button">НОВАЯ САГА</button>
+        <button id="help-button" class="secondary">УПРАВЛЕНИЕ</button>
+      </div>
+      <div id="help-panel" class="menu-panel hidden">
+        <div class="controls-card">
+          <div><kbd>W A S D</kbd><span>движение</span></div>
+          <div><kbd>SPACE</kbd><span>прыжок</span></div>
+          <div><kbd>ЛКМ</kbd><span>сломать</span></div>
+          <div><kbd>ПКМ</kbd><span>поставить</span></div>
+          <div><kbd>1 — 8</kbd><span>выбрать блок</span></div>
+          <div><kbd>SHIFT</kbd><span>бег</span></div>
+          <div><kbd>E</kbd><span>рюкзак и крафт</span></div>
+          <div><kbd>J</kbd><span>журнал охотника</span></div>
+          <div><kbd>F</kbd><span>чутьё охотника</span></div>
+          <div><kbd>← ↑ →</kbd><span>обзор без захвата</span></div>
+          <div><kbd>ESC</kbd><span>привал</span></div>
+        </div>
+        <button id="back-button" class="secondary">НАЗАД</button>
+      </div>
+      <div class="menu-footer"><span>BlockCraft 1.0</span><span>Северные земли</span></div>
+    </section>
+
+    <section id="pause-screen" class="screen">
+      <div class="sigil small" aria-hidden="true">ᛉ</div>
+      <h2>ПРИВАЛ</h2>
+      <button id="resume-button">ВЕРНУТЬСЯ В ПУТЬ</button>
+      <button id="new-world-button" class="secondary">НОВАЯ САГА</button>
+      <div class="settings-panel">
+        <label><span>Чувствительность</span><input id="setting-sensitivity" type="range" min="0.001" max="0.005" step="0.0002"></label>
+        <label><span>Громкость</span><input id="setting-volume" type="range" min="0" max="1" step="0.05"></label>
+        <label><span>Яркость</span><input id="setting-brightness" type="range" min="0.4" max="2" step="0.05"></label>
+        <label><span>Дальность мира</span><select id="setting-distance"><option value="1">Ближняя</option><option value="2">Средняя</option><option value="3">Дальняя</option></select></label>
+      </div>
+      <small>Изменения мира сохраняются в этом браузере</small>
+    </section>
+
+    <div id="hud">
+      <div id="status">
+        <div class="survival-stat health"><div><span>♥</span><b id="health-value">20</b></div><i><span id="health-fill"></span></i></div>
+        <div class="survival-stat hunger"><div><span>◆</span><b id="hunger-value">20</b></div><i><span id="hunger-fill"></span></i></div>
+      </div>
+      <div id="world-status"><span id="time-status">☼ День 06:00</span><span id="region-status">Земли 0 : 0</span></div>
+      <div id="quest-objective">
+        <small id="objective-title">Первый огонь</small>
+        <span id="objective-text">Добудьте дубовые брёвна</span>
+        <b id="objective-progress"></b>
+        <em id="objective-hint"></em>
+        <i>J — открыть журнал</i>
+      </div>
+      <div id="quest-compass"><span id="compass-arrow"><svg width="12" height="22" viewBox="0 0 12 22" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><polygon points="6,0 11,10 8.5,10 8.5,22 3.5,22 3.5,10 1,10" fill="currentColor"/></svg></span><b id="compass-distance">Старый лагерь · ~10 м</b></div>
+      <div id="boss-bar"><b id="boss-name">Цель охоты</b><i><span id="boss-fill"></span></i></div>
+      <div id="tooltip"></div>
+      <div id="hotbar"></div>
+      <div id="mining-progress"><span></span></div>
+    </div>
+
+    <section id="inventory-screen">
+      <header class="inventory-header">
+        <div><span class="rune">ᛉ</span><div><small>Снаряжение странника</small><h2>РЮКЗАК</h2></div></div>
+        <button id="inventory-close" aria-label="Закрыть">×</button>
+      </header>
+      <div class="inventory-layout">
+        <aside class="item-panel">
+          <div id="item-details">
+            <h3>Выберите предмет</h3>
+            <p>Здесь появятся описание, свойства и рецепт.</p>
+          </div>
+          <div id="equipment"></div>
+        </aside>
+        <main class="bag-panel">
+          <h3>Рюкзак <small>9 быстрых + 27 походных слотов</small></h3>
+          <div id="inventory-grid"></div>
+          <section id="container-section" class="hidden">
+            <h3>Сундук</h3>
+            <div id="container-grid"></div>
+          </section>
+        </main>
+        <aside class="craft-panel">
+          <div class="craft-title"><small>Доступные рецепты</small><h3 id="station-title">Ручная работа</h3></div>
+          <div id="craft-list"></div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="journal-screen">
+      <header class="inventory-header">
+        <div><span class="rune">ᛉ</span><div><small>Записи и контракты</small><h2>ЖУРНАЛ ОХОТНИКА</h2></div></div>
+        <button id="journal-close" aria-label="Закрыть">×</button>
+      </header>
+      <div id="journal-content"></div>
+    </section>
+
+    <section id="victory-screen" class="screen">
+      <div class="sigil" aria-hidden="true">ᛉ</div>
+      <small>САГА ЗАВЕРШЕНА</small>
+      <h2>ДРЕВНИЙ ЛЕШИЙ ПОВЕРЖЕН</h2>
+      <p>Лес отступил. Северные земли открыты для свободной игры.</p>
+      <div id="victory-stats"></div>
+      <button id="victory-continue">ПРОДОЛЖИТЬ ПУТЬ</button>
+    </section>
+
+    <div id="damage-flash"></div>
+
+    <div id="cursor-stack"></div>
+
+    <div id="toast"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
